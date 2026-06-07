@@ -1,0 +1,280 @@
+import fs from 'fs'
+import pdfParse from 'pdf-parse'
+import { ParsedTransaction } from '../types'
+
+interface ParserResult {
+  bankName: string
+  transactions: ParsedTransaction[]
+  rawText: string
+}
+
+// ─── Supported banks list ─────────────────────────────────────────────────────
+
+export const SUPPORTED_BANKS = [
+  'GTBank',
+  'Access Bank',
+  'Zenith Bank',
+  'First Bank',
+  'UBA',
+  'Union Bank',
+  'Sterling Bank',
+  'Fidelity Bank',
+  'Polaris Bank',
+  'Stanbic IBTC',
+  'Kuda Bank',
+  'Opay',
+  'Palmpay',
+  'Moniepoint',
+  'Wema Bank',
+  'Ecobank',
+  'FCMB',
+  'Jaiz Bank',
+]
+
+// ─── Bank detection ───────────────────────────────────────────────────────────
+// Only check the first 500 characters (header) to avoid false positives
+// from bank names appearing in transaction descriptions
+
+function detectBank(text: string): string {
+  const header = text.slice(0, 500).toLowerCase()
+
+  if (header.includes('kuda')) return 'Kuda Bank'
+  if (header.includes('guaranty trust') || header.includes('gtbank')) return 'GTBank'
+  if (header.includes('access bank')) return 'Access Bank'
+  if (header.includes('zenith bank')) return 'Zenith Bank'
+  if (header.includes('first bank') || header.includes('firstbank')) return 'First Bank'
+  if (header.includes('united bank for africa') || header.includes('uba ')) return 'UBA'
+  if (header.includes('union bank')) return 'Union Bank'
+  if (header.includes('sterling bank')) return 'Sterling Bank'
+  if (header.includes('fidelity bank')) return 'Fidelity Bank'
+  if (header.includes('polaris bank')) return 'Polaris Bank'
+  if (header.includes('stanbic')) return 'Stanbic IBTC'
+  if (header.includes('opay')) return 'Opay'
+  if (header.includes('palmpay')) return 'Palmpay'
+  if (header.includes('moniepoint')) return 'Moniepoint'
+  if (header.includes('wema bank')) return 'Wema Bank'
+  if (header.includes('ecobank')) return 'Ecobank'
+  if (header.includes('fcmb')) return 'FCMB'
+
+  return 'Unknown Bank'
+}
+
+// ─── Amount parser ────────────────────────────────────────────────────────────
+
+function parseAmount(raw: string): number {
+  // Remove ₦, commas, spaces
+  return parseFloat(raw.replace(/[₦,\s]/g, ''))
+}
+
+// ─── Date parser ──────────────────────────────────────────────────────────────
+
+function parseDate(raw: string): Date {
+  const cleaned = raw.trim()
+
+  // DD/MM/YY or DD/MM/YYYY
+  const parts = cleaned.split('/')
+  if (parts.length === 3) {
+    const [d, m, y] = parts
+    const year = y.length === 2 ? `20${y}` : y
+    const date = new Date(
+      `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    )
+    if (!isNaN(date.getTime())) return date
+  }
+
+  const fallback = new Date(cleaned)
+  return isNaN(fallback.getTime()) ? new Date() : fallback
+}
+
+// ─── Kuda Bank parser ─────────────────────────────────────────────────────────
+// Kuda statements are multi-line. Each transaction block looks like:
+// DD/MM/YY
+// HH:MM:SS
+// ₦AMOUNT
+// inward/outward transfer | bills
+// recipient/description
+// category
+// ₦BALANCE
+
+function parseKuda(text: string): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = []
+
+  // Split into lines and clean up
+  const lines = text
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+
+  const datePattern = /^\d{2}\/\d{2}\/\d{2}$/
+  const timePattern = /^\d{2}:\d{2}:\d{2}$/
+  const amountPattern = /^₦[\d,]+\.\d{2}$/
+
+  let i = 0
+  while (i < lines.length) {
+    // Look for a date line
+    if (datePattern.test(lines[i])) {
+      const date = parseDate(lines[i])
+
+      // Next line should be time — skip it
+      let j = i + 1
+      if (j < lines.length && timePattern.test(lines[j])) j++
+
+      // Next should be amount
+      if (j < lines.length && amountPattern.test(lines[j])) {
+        const amount = parseAmount(lines[j])
+        j++
+
+        // Next is transfer type
+        let type: 'DEBIT' | 'CREDIT' = 'DEBIT'
+        if (j < lines.length) {
+          const transferLine = lines[j].toLowerCase()
+          if (
+            transferLine.includes('inward') ||
+            transferLine.includes('credit') ||
+            transferLine.includes('reversal')
+          ) {
+            type = 'CREDIT'
+          }
+          j++
+        }
+
+        // Collect description lines until we hit a balance (₦amount)
+        const descLines: string[] = []
+        while (j < lines.length && !amountPattern.test(lines[j])) {
+          // Stop if we hit the next date
+          if (datePattern.test(lines[j])) break
+          descLines.push(lines[j])
+          j++
+        }
+
+        // Skip the balance line
+        if (j < lines.length && amountPattern.test(lines[j])) j++
+
+        const description = descLines
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 100)
+
+        if (amount > 0 && description.length > 0) {
+          transactions.push({
+            date,
+            description,
+            amount,
+            type,
+            rawText: `${lines[i]} ${amount} ${type}`,
+          })
+        }
+
+        i = j
+        continue
+      }
+    }
+    i++
+  }
+
+  return transactions
+}
+
+// ─── Generic single-line parser ───────────────────────────────────────────────
+// For GTBank, Access, Zenith, First Bank etc.
+
+const SINGLE_LINE_PATTERNS = [
+  // DD/MM/YYYY description AMOUNT DR/CR
+  /(\d{2}[\/\-]\d{2}[\/\-]\d{4})\s+(.+?)\s+([\d,]+\.\d{2})\s*(DR|CR|Debit|Credit)/gi,
+
+  // DD-Mon-YYYY description AMOUNT
+  /(\d{2}[-\s](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-\s]\d{4})\s+(.+?)\s+([\d,]+\.\d{2})/gi,
+
+  // Generic date + two amounts
+  /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\s+(.{5,80}?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/gi,
+]
+
+function inferType(line: string): 'DEBIT' | 'CREDIT' {
+  const upper = line.toUpperCase()
+  if (upper.includes(' CR') || upper.includes('CREDIT') || upper.includes('SALARY') || upper.includes(' FROM ')) return 'CREDIT'
+  return 'DEBIT'
+}
+
+function parseGeneric(text: string): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = []
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+
+  for (const line of lines) {
+    for (const pattern of SINGLE_LINE_PATTERNS) {
+      pattern.lastIndex = 0
+      const match = pattern.exec(line)
+
+      if (match) {
+        const [rawLine, rawDate, description, rawAmount, drCr] = match
+        const amount = parseFloat(rawAmount.replace(/,/g, ''))
+        const date = parseDate(rawDate)
+        const type = drCr
+          ? drCr.toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT'
+          : inferType(rawLine)
+
+        if (amount > 0 && description.length > 2) {
+          transactions.push({
+            date,
+            description: description.trim(),
+            amount,
+            type,
+            rawText: line,
+          })
+        }
+        break
+      }
+    }
+  }
+
+  return transactions
+}
+
+// ─── Main parser ──────────────────────────────────────────────────────────────
+
+export async function parsePdf(filePath: string): Promise<ParserResult> {
+  const buffer = fs.readFileSync(filePath)
+  const parsed = await pdfParse(buffer)
+  const rawText = parsed.text
+
+  const bankName = detectBank(rawText)
+
+  // Route to the right parser based on bank
+  let transactions: ParsedTransaction[] = []
+
+  switch (bankName) {
+    case 'Kuda Bank':
+    case 'Opay':
+    case 'Palmpay':
+      transactions = parseKuda(rawText)
+      break
+    default:
+      transactions = parseGeneric(rawText)
+      break
+  }
+
+  console.log(
+    `[Parser] Bank: ${bankName} | Extracted ${transactions.length} transactions`
+  )
+
+  return { bankName, transactions, rawText }
+}
+
+// ─── Text chunker ─────────────────────────────────────────────────────────────
+
+export function chunkText(
+  text: string,
+  chunkSize = 500,
+  overlap = 50
+): string[] {
+  const words = text.split(/\s+/)
+  const chunks: string[] = []
+
+  for (let i = 0; i < words.length; i += chunkSize - overlap) {
+    const chunk = words.slice(i, i + chunkSize).join(' ')
+    if (chunk.trim()) chunks.push(chunk.trim())
+    if (i + chunkSize >= words.length) break
+  }
+
+  return chunks
+}

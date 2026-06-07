@@ -1,0 +1,155 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  name         String?
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  documents    Document[]
+  taxProfiles    TaxProfile[]
+  taxCalculations TaxCalculation[]
+
+  @@map("users")
+}
+
+model Document {
+  id           String         @id @default(uuid())
+  userId       String         @map("user_id")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName     String         @map("file_name")
+  fileHash     String         @unique @map("file_hash")
+  filePath     String         @map("file_path")
+  bankName     String?        @map("bank_name")
+  status       DocumentStatus @default(PENDING)
+  errorMessage String?        @map("error_message")
+  parsedAt     DateTime?      @map("parsed_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  transactions Transaction[]
+  chunks       DocumentChunk[]
+  taxCalculations TaxCalculation[]
+
+  @@map("documents")
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  documentId  String          @map("document_id")
+  document    Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  date        DateTime
+  description String
+  amount      Decimal         @db.Decimal(12, 2)
+  type        TransactionType
+  category    String?
+  confidence  Float?
+  rawText     String?         @map("raw_text")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@map("transactions")
+}
+
+model DocumentChunk {
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content    String
+  chunkIndex Int      @map("chunk_index")
+  embedding  Unsupported("vector(384)")?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("document_chunks")
+}
+
+model JobLog {
+  id         String    @id @default(uuid())
+  documentId String    @map("document_id")
+  jobType    String    @map("job_type")
+  status     JobStatus @default(PENDING)
+  attempts   Int       @default(0)
+  error      String?
+  startedAt  DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("job_logs")
+}
+
+enum DocumentStatus {
+  PENDING
+  PARSING
+  CATEGORIZING
+  EMBEDDING
+  COMPLETED
+  FAILED
+}
+
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model TaxProfile {
+  id                 String      @id @default(uuid())
+  userId             String      @map("user_id")
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userType           TaxUserType
+  stateOfResidence   String      @map("state_of_residence")
+  monthlyRent        Decimal?    @map("monthly_rent") @db.Decimal(12, 2)
+  pensionRate        Float       @default(0.08) @map("pension_rate")
+  nhfRate            Float       @default(0.025) @map("nhf_rate")
+  nhisRate           Float       @default(0.05) @map("nhis_rate")
+  lifeInsurance      Decimal?    @map("life_insurance") @db.Decimal(12, 2)
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  calculations       TaxCalculation[]
+
+  @@map("tax_profiles")
+}
+
+model TaxCalculation {
+  id                  String      @id @default(uuid())
+  documentId          String      @map("document_id")
+  document            Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId              String      @map("user_id")
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taxProfileId        String      @map("tax_profile_id")
+  taxProfile          TaxProfile  @relation(fields: [taxProfileId], references: [id])
+  userType            TaxUserType
+  taxYear             Int         @map("tax_year")
+  grossIncome         Decimal     @map("gross_income") @db.Decimal(12, 2)
+  totalDeductions     Decimal     @map("total_deductions") @db.Decimal(12, 2)
+  chargeableIncome    Decimal     @map("chargeable_income") @db.Decimal(12, 2)
+  totalTax            Decimal     @map("total_tax") @db.Decimal(12, 2)
+  effectiveRate       Float       @map("effective_rate")
+  monthlyTax          Decimal     @map("monthly_tax") @db.Decimal(12, 2)
+  breakdown           Json
+  deductions          Json
+  checklist           Json
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  @@map("tax_calculations")
+}
+
+enum TaxUserType {
+  PAYE
+  SELF_EMPLOYED
+  BUSINESS
+}
