@@ -16,7 +16,7 @@ const TAX_BANDS_2026 = [
 
 // ─── Nigerian States IRS Directory ───────────────────────────────────────────
 
-export const NIGERIAN_STATES: Record
+export const NIGERIAN_STATES: Record<
   string,
   { name: string; irsName: string; portal: string }
 > = {
