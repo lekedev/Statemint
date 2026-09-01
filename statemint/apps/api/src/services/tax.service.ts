@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { TaxUserType } from '@prisma/client'
+import { Prisma, TaxUserType } from '@prisma/client'
 
 // ─── 2026 Tax Bands (new Finance Act) ────────────────────────────────────────
 // First ₦800,000 is completely tax-free
@@ -488,9 +488,9 @@ export async function calculateTax(
       totalTax,
       monthlyTax,
       effectiveRate,
-      breakdown,
-      deductions,
-      checklist,
+      breakdown: breakdown as unknown as Prisma.InputJsonValue,
+      deductions: deductions as unknown as Prisma.InputJsonValue,
+      checklist: checklist as unknown as Prisma.InputJsonValue,
     },
   })
 
@@ -540,9 +540,9 @@ export async function getLatestTaxCalculation(
     monthlyTax: Number(calculation.monthlyTax),
     effectiveRate: calculation.effectiveRate,
     isTaxFree: Number(calculation.chargeableIncome) <= TAX_FREE_THRESHOLD,
-    breakdown: calculation.breakdown as TaxBandBreakdown[],
-    deductions: calculation.deductions as DeductionItem[],
-    checklist: calculation.checklist as ChecklistItem[],
+    breakdown: calculation.breakdown as unknown as TaxBandBreakdown[],
+    deductions: calculation.deductions as unknown as DeductionItem[],
+    checklist: calculation.checklist as unknown as ChecklistItem[],
     paymentGuide: buildPaymentGuide(profile.stateOfResidence),
   }
 }
