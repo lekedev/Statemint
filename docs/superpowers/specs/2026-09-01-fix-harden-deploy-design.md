@@ -26,12 +26,54 @@ security/scale/compliance for real end users.
 
 ## Findings that motivate this spec
 
-Discovered during the codebase audit (2026-09-01):
+Discovered during the codebase audit (2026-09-01). Initial findings (1-6)
+came from reading the code; a follow-up `tsc --noEmit` pass on both apps
+(done while writing the implementation plan) surfaced that the API
+currently **does not compile at all**, which expanded finding 1
+considerably (see 1a-1h below) and added finding 7.
 
-1. **Broken build.** `apps/api/src/services/tax.service.ts` has an
-   uncommitted, unfinished edit — the `NIGERIAN_STATES` type annotation is
-   missing its opening `Record<` angle bracket in the committed version (fixed
-   in the working tree but not committed).
+1. **Broken build — confirmed via `tsc --noEmit`.** The API does not
+   compile. Contributing errors, all confirmed by running the compiler:
+   - **(1a)** `tax.service.ts` — the `NIGERIAN_STATES` type annotation is
+     missing its opening `Record<` angle bracket in the committed version
+     (already fixed in the uncommitted working tree).
+   - **(1b)** `qa.service.ts` — `prisma.$queryRaw` generic call is malformed
+     (missing `<` before the result type), which cascades into several
+     further type errors in the same function.
+   - **(1c)** `bull` is pinned to `^1.1.3` in `package.json`, an ancient
+     pre-TypeScript release with no bundled type declarations, while
+     `@types/bull` is installed as a deprecated stub that assumes bull
+     ships its own types. Together these make `tsc` unable to resolve any
+     types for the `bull` module and abort compilation entirely — this is
+     what was hiding the rest of the errors below. Needs bumping `bull` to
+     a current 4.x release (API-compatible with the existing `.process()`
+     / `.add()` usage) and dropping the `@types/bull` stub.
+   - **(1d)** `lib/hf.ts` — `categorizeTransaction` treats the HuggingFace
+     zero-shot response as `ZeroShotResult[]` and reads `result[0].label` /
+     `.score`, but the real response (and the declared `ZeroShotResult`
+     interface) is a single object with parallel `labels`/`scores` arrays.
+     This is a real correctness bug, not just a type error — categorization
+     likely silently returns `undefined` at runtime.
+   - **(1e)** `auth.routes.ts` — `jwt.sign(..., { expiresIn: ... })` no
+     longer type-checks against current `@types/jsonwebtoken`, which
+     expects `number | StringValue` rather than a bare `string`.
+   - **(1f)** `tax.service.ts` — the `breakdown`/`deductions`/`checklist`
+     Prisma `Json` columns are written with plain typed arrays (not
+     assignable to `InputJsonValue`) and read back with unsafe direct
+     casts instead of going through `unknown` first.
+   - **(1g)** `worker.ts` has several implicit-`any` parameters (`job`,
+     `t`, `i`) under `strict`/`noImplicitAny`, currently masked by (1c).
+   - **(1h)** `src/workers/worker.ts` is a duplicate, dead copy of
+     `src/worker.ts` with broken relative imports (missing `../`). It is
+     not referenced by any npm script or Dockerfile — appears to be a
+     stray leftover file.
+
+   None of this was caught by local `npm run dev` because both
+   `dev`/`dev:worker` scripts run via `ts-node-dev --transpile-only`,
+   which strips types without checking them. It only surfaces on
+   `npm run build` (`tsc`) or the equivalent Docker build step — which
+   matters directly for this spec's deploy goal.
+
 2. **Unhandled async errors.** The API runs Express 4.19, which does not
    forward rejected promises from async route handlers to error-handling
    middleware. None of `auth.routes.ts`, `document.routes.ts`,
@@ -50,6 +92,17 @@ Discovered during the codebase audit (2026-09-01):
    instead of a real `@unique` constraint on `userId`.
 6. **Unfinished boilerplate.** `apps/web` still has the stock
    `create-next-app` `README.md` and unused default SVGs in `public/`.
+7. **Missing API Dockerfile.** `docker-compose.yml`'s `api` service
+   references `dockerfile: Dockerfile` under `apps/api`, but only
+   `Dockerfile.worker` exists — `docker-compose up` cannot currently build
+   the api service at all. Additionally, `Dockerfile.worker` runs
+   `ts-node-dev` (dev mode) as its container command rather than building
+   and running compiled JS; both Dockerfiles should build with `tsc` and
+   run `node dist/...`, which also ensures the compile errors above
+   actually get caught before a deploy rather than silently ignored.
+8. **Web build error.** `apps/web/app/analytics/[id]/page.tsx` imports
+   `ChatMessage` from `@/types`, but `apps/web/types/index.ts` has no such
+   export — confirmed via `tsc --noEmit` on the web app.
 
 ## Goals
 
@@ -71,8 +124,29 @@ Discovered during the codebase audit (2026-09-01):
 
 ### 1. Bug fixes
 
-- Commit the `Record<...>` generic fix in `tax.service.ts` (the file
-  currently fails to compile without it).
+- Commit the `Record<...>` generic fix in `tax.service.ts` (finding 1a).
+- Fix the malformed `prisma.$queryRaw` generic call in `qa.service.ts`
+  (finding 1b).
+- Bump `bull` from `^1.1.3` to a current 4.x release and remove the
+  `@types/bull` stub dependency (finding 1c) — this is what's currently
+  blocking `tsc` from reporting anything past itself.
+- Fix `categorizeTransaction` in `lib/hf.ts` to read the HuggingFace
+  zero-shot response as the single-object `{ labels, scores }` shape it
+  actually is, instead of indexing into it as an array of per-label
+  results (finding 1d).
+- Fix the `jwt.sign` call in `auth.routes.ts` to satisfy current
+  `@types/jsonwebtoken` typing (finding 1e).
+- Fix the `breakdown`/`deductions`/`checklist` Prisma `Json` read/write
+  casts in `tax.service.ts` (finding 1f).
+- Add explicit types to the previously-masked implicit-`any` parameters in
+  `worker.ts` (finding 1g).
+- Delete the dead, broken-import duplicate `src/workers/worker.ts`
+  (finding 1h).
+- Add the missing `apps/api/Dockerfile`, and change both it and
+  `Dockerfile.worker` to build with `tsc` and run the compiled output
+  (`node dist/...`) rather than `ts-node-dev` (finding 7).
+- Add the missing `ChatMessage` export to `apps/web/types/index.ts`
+  (finding 8).
 - Add an async-error-handling layer so a thrown/rejected error in any route
   reaches the existing global error middleware in `src/index.ts` and returns
   a clean JSON 500, instead of hanging the request. Prefer
