@@ -452,7 +452,7 @@ export async function calculateTax(
 
   // Persist calculation
   const taxProfile = await prisma.taxProfile.upsert({
-    where: { id: `${userId}-profile` },
+    where: { userId },
     update: {
       userType: profile.userType,
       stateOfResidence: profile.stateOfResidence,
@@ -463,7 +463,6 @@ export async function calculateTax(
       lifeInsurance: profile.lifeInsurance,
     },
     create: {
-      id: `${userId}-profile`,
       userId,
       userType: profile.userType,
       stateOfResidence: profile.stateOfResidence,

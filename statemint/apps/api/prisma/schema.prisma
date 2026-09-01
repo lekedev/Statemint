@@ -108,7 +108,7 @@ enum JobStatus {
 
 model TaxProfile {
   id                 String      @id @default(uuid())
-  userId             String      @map("user_id")
+  userId             String      @unique @map("user_id")
   user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   userType           TaxUserType
   stateOfResidence   String      @map("state_of_residence")
