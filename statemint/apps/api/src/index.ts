@@ -13,14 +13,20 @@ import analyticsRoutes from './routes/analytics.routes'
 import taxRoutes from './routes/tax.routes'
 import { prisma } from './lib/prisma'
 import { closeQueues } from './lib/queues'
+import { requireEnv } from './lib/env'
+
+requireEnv('JWT_SECRET')
 
 const app = express()
 const PORT = process.env.PORT || 4000
 
 // ─── Security & middleware ────────────────────────────────────────────────────
 
+const corsOrigin =
+  process.env.NODE_ENV === 'production' ? requireEnv('FRONTEND_URL') : '*'
+
 app.use(helmet())
-app.use(cors({ origin: process.env.FRONTEND_URL || '*' }))
+app.use(cors({ origin: corsOrigin }))
 app.use(compression())
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 app.use(express.json({ limit: '1mb' }))

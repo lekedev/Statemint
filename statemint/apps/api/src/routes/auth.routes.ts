@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { ApiResponse, AuthTokens } from '../types'
+import { requireEnv } from '../lib/env'
 
 const router = Router()
 
@@ -19,13 +20,9 @@ const LoginSchema = z.object({
 })
 
 function signToken(userId: string, email: string): string {
-  return jwt.sign(
-    { userId, email },
-    process.env.JWT_SECRET || 'fallback_secret',
-    {
-      expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'],
-    }
-  )
+  return jwt.sign({ userId, email }, requireEnv('JWT_SECRET'), {
+    expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'],
+  })
 }
 
 // POST /api/auth/register
