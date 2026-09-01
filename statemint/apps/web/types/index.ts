@@ -93,3 +93,8 @@ export interface NigerianState {
   irsName: string
   portal: string
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
