@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import Bull from 'bull'
 import { prisma } from './lib/prisma'
 import { parseQueue, categorizeQueue, embedQueue } from './lib/queues'
 import { parsePdf, chunkText } from './services/parser.service'
@@ -9,7 +10,7 @@ console.log('[Worker] Statemint pipeline worker starting...')
 
 // ─── Parse Worker ─────────────────────────────────────────────────────────────
 
-parseQueue.process(async (job) => {
+parseQueue.process(async (job: Bull.Job<ParseJobData>) => {
   const { documentId, filePath } = job.data as ParseJobData
   console.log(`[Parse] Starting document ${documentId}`)
 
@@ -32,7 +33,7 @@ parseQueue.process(async (job) => {
     })
 
     const created = await prisma.$transaction(
-      transactions.map((t) =>
+      transactions.map((t: (typeof transactions)[number]) =>
         prisma.transaction.create({
           data: {
             documentId,
@@ -83,7 +84,7 @@ parseQueue.process(async (job) => {
 
 // ─── Categorize Worker ────────────────────────────────────────────────────────
 
-categorizeQueue.process(async (job) => {
+categorizeQueue.process(async (job: Bull.Job<CategorizeJobData>) => {
   const { documentId, transactionIds } = job.data as CategorizeJobData
   console.log(
     `[Categorize] Processing ${transactionIds.length} transactions for ${documentId}`
@@ -108,7 +109,7 @@ categorizeQueue.process(async (job) => {
     const results = await categorizeBatch(descriptions)
 
     await prisma.$transaction(
-      transactions.map((t, i) => {
+      transactions.map((t: (typeof transactions)[number], i: number) => {
         const result = results[i]
         return prisma.transaction.update({
           where: { id: t.id },
@@ -147,7 +148,7 @@ categorizeQueue.process(async (job) => {
 
 // ─── Embed Worker ─────────────────────────────────────────────────────────────
 
-embedQueue.process(async (job) => {
+embedQueue.process(async (job: Bull.Job<EmbedJobData>) => {
   const { documentId } = job.data as EmbedJobData
   console.log(`[Embed] Starting embedding for ${documentId}`)
 
@@ -174,7 +175,7 @@ embedQueue.process(async (job) => {
       `Total transactions: ${document.transactions.length}`,
       '',
       ...document.transactions.map(
-        (t) =>
+        (t: (typeof document.transactions)[number]) =>
           `${t.date.toISOString().slice(0, 10)} | ${t.type} | ₦${Number(
             t.amount
           ).toLocaleString()} | ${t.description} | ${
