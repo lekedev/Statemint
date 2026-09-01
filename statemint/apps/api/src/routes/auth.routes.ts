@@ -22,7 +22,9 @@ function signToken(userId: string, email: string): string {
   return jwt.sign(
     { userId, email },
     process.env.JWT_SECRET || 'fallback_secret',
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    {
+      expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'],
+    }
   )
 }
 
