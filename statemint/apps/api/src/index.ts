@@ -77,14 +77,16 @@ app.use(
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`
   ╔═══════════════════════════════════════╗
   ║         Statemint API                 ║
   ║  Running on http://localhost:${PORT}    ║
   ╚═══════════════════════════════════════╝
   `)
-})
+  })
+}
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 
