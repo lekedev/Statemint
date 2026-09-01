@@ -209,7 +209,7 @@ export async function detectIncomeProfile(
 
 // ─── Core tax calculation engine ──────────────────────────────────────────────
 
-function calculatePAYETax(chargeableIncome: number): {
+export function calculatePAYETax(chargeableIncome: number): {
   totalTax: number
   breakdown: TaxBandBreakdown[]
 } {
@@ -241,7 +241,7 @@ function calculatePAYETax(chargeableIncome: number): {
   return { totalTax, breakdown }
 }
 
-function calculateDeductions(
+export function calculateDeductions(
   grossIncome: number,
   profile: TaxProfileInput
 ): DeductionItem[] {
