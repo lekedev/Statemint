@@ -14,7 +14,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [router])
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#0A0A0F' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -26,8 +26,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             alignItems: 'center',
             gap: 12,
             padding: '12px 16px',
-            background: '#0D0D14',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--surface-2)',
+            borderBottom: '1px solid var(--border)',
             position: 'sticky',
             top: 0,
             zIndex: 30,
@@ -35,7 +35,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         >
           <button
             onClick={() => setSidebarOpen(true)}
-            style={{ padding: 8, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}
+            style={{ padding: 8, borderRadius: 8, background: 'var(--surface)', border: 'none', cursor: 'pointer', color: 'var(--gray-1)' }}
           >
             <Menu size={18} />
           </button>
@@ -43,7 +43,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div style={{ width: 28, height: 28, background: 'linear-gradient(135deg, #00D97E, #00A85E)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ color: '#0A0A0F', fontWeight: 800, fontSize: 13 }}>S</span>
             </div>
-            <span style={{ color: '#fff', fontWeight: 700 }}>Statemint</span>
+            <span style={{ color: 'var(--white)', fontWeight: 700 }}>Statemint</span>
           </div>
         </header>
 
