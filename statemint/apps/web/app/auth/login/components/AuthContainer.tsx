@@ -5,7 +5,7 @@ import RightPanel from "./RightPanel";
 
 export default function AuthContainer() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#0A0A0F]">
+    <main className="relative min-h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
 
       {/* Background Glow */}
       <div className="absolute -left-40 top-0 h-[500px] w-[500px] rounded-full bg-emerald-500/20 blur-[180px]" />
@@ -14,18 +14,12 @@ export default function AuthContainer() {
       <div className="relative flex min-h-screen items-center justify-center px-6 py-10">
 
         <div
-          className="
-          grid
-          w-full
-          max-w-7xl
-          overflow-hidden
-          rounded-[32px]
-          border
-          border-white/10
-          bg-[#111116]
-          shadow-[0_40px_120px_rgba(0,0,0,.55)]
-          lg:grid-cols-[1fr_520px]
-          "
+          className="grid w-full max-w-7xl overflow-hidden rounded-[32px] lg:grid-cols-[1fr_520px]"
+          style={{
+            border: '1px solid var(--border-2)',
+            background: 'var(--surface)',
+            boxShadow: '0 40px 120px rgba(0,0,0,.35)',
+          }}
         >
           <LeftPanel />
           <RightPanel />
