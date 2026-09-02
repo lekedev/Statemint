@@ -18,7 +18,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const url: string = error.config?.url || ''
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register')
+    if (error.response?.status === 401 && !isAuthEndpoint && typeof window !== 'undefined') {
       localStorage.removeItem('statemint_token')
       window.location.href = '/auth/login'
     }

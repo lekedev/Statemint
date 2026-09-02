@@ -14,6 +14,7 @@ import StatCard from '@/components/ui/StatCard'
 import { Analytics, ChatMessage } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import api from '@/lib/api'
+import { useTheme } from '@/lib/theme'
 
 const CATEGORY_COLORS = [
   '#00D97E', '#60A5FA', '#F59E0B', '#F87171',
@@ -42,6 +43,7 @@ export default function AnalyticsPage() {
   const [question, setQuestion] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatLoading, setChatLoading] = useState(false)
+  const { theme } = useTheme()
 
   useEffect(() => {
     async function load() {
@@ -139,9 +141,9 @@ export default function AnalyticsPage() {
           <p style={{ color: 'var(--white)', fontWeight: 700, fontSize: 15, marginBottom: 20 }}>Monthly Flow</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={analytics.monthlyFlow} barGap={4}>
-              <XAxis dataKey="month" tick={{ fill: 'var(--gray-3)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(20,23,26,0.32)', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-2)' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }} />
               <Bar dataKey="totalCredits" fill="#00D97E" radius={[6, 6, 0, 0]} maxBarSize={40} />
               <Bar dataKey="totalDebits" fill="#FF4D4D" radius={[6, 6, 0, 0]} maxBarSize={40} />
             </BarChart>

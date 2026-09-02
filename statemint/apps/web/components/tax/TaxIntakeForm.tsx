@@ -22,7 +22,9 @@ export default function TaxIntakeForm({ documentId, detection, onCalculated }: T
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get('/tax/states').then((res) => setStates(res.data.data || []))
+    api.get('/tax/states')
+      .then((res) => setStates(res.data.data || []))
+      .catch(() => setError('Could not load the list of states. Please refresh and try again.'))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {

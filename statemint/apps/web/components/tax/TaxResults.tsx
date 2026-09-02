@@ -1,5 +1,6 @@
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react'
 import Pill from '@/components/ui/Pill'
+import StatCard from '@/components/ui/StatCard'
 import { TaxCalculation } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
@@ -7,27 +8,14 @@ export default function TaxResults({ result }: { result: TaxCalculation }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Summary */}
-      <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <div>
-          <p style={{ color: 'var(--gray-2)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            Gross income
-          </p>
-          <p style={{ color: 'var(--white)', fontSize: 22, fontWeight: 800 }}>{formatCurrency(result.grossIncome)}</p>
-        </div>
-        <div>
-          <p style={{ color: 'var(--gray-2)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            Total tax (annual)
-          </p>
-          <p style={{ color: result.isTaxFree ? 'var(--green)' : 'var(--white)', fontSize: 22, fontWeight: 800 }}>
-            {formatCurrency(result.totalTax)}
-          </p>
-        </div>
-        <div>
-          <p style={{ color: 'var(--gray-2)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-            Effective rate
-          </p>
-          <p style={{ color: 'var(--white)', fontSize: 22, fontWeight: 800 }}>{result.effectiveRate.toFixed(1)}%</p>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <StatCard label="Gross income" value={formatCurrency(result.grossIncome)} />
+        <StatCard
+          label="Total tax (annual)"
+          value={formatCurrency(result.totalTax)}
+          positive={result.isTaxFree}
+        />
+        <StatCard label="Effective rate" value={`${result.effectiveRate.toFixed(1)}%`} />
       </div>
 
       {result.isTaxFree && (

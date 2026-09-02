@@ -6,6 +6,7 @@
   --surface-2: #1A1A26;
   --border:    rgba(255,255,255,0.07);
   --border-2:  rgba(255,255,255,0.12);
+  --hover:     rgba(255,255,255,0.06);
   --green:     #00D97E;
   --green-dim: rgba(0,217,126,0.10);
   --green-glow:rgba(0,217,126,0.06);
@@ -27,6 +28,7 @@
   --surface-2: #F3F4F6;
   --border:    rgba(0,0,0,0.08);
   --border-2:  rgba(0,0,0,0.14);
+  --hover:     rgba(0,0,0,0.05);
   --green:     #00D97E;
   --green-dim: rgba(0,217,126,0.12);
   --green-glow:rgba(0,217,126,0.08);
@@ -111,8 +113,8 @@ body {
   gap: 6px;
 }
 .btn-secondary:hover {
-  border-color: rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.06);
+  border-color: var(--border-2);
+  background: var(--hover);
 }
 
 .btn-ghost {
@@ -128,7 +130,7 @@ body {
   align-items: center;
   gap: 6px;
 }
-.btn-ghost:hover { background: rgba(255,255,255,0.06); color: var(--white); }
+.btn-ghost:hover { background: var(--hover); color: var(--white); }
 
 /* Inputs */
 .input {
@@ -182,8 +184,8 @@ body {
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gray-3); }
 
 /* Number accent */
 .num-green { color: var(--green); }
