@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { JwtPayload, ApiResponse } from '../types'
+import { requireEnv } from '../lib/env'
 
 export interface AuthRequest extends Request {
   user?: JwtPayload
@@ -24,10 +25,7 @@ export function authenticate(
   const token = authHeader.slice(7)
 
   try {
-    const payload = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'fallback_secret'
-    ) as JwtPayload
+    const payload = jwt.verify(token, requireEnv('JWT_SECRET')) as JwtPayload
 
     req.user = payload
     next()

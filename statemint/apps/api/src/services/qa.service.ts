@@ -13,7 +13,7 @@ async function findSimilarChunks(
 ): Promise<string[]> {
   const vectorLiteral = `[${embedding.join(',')}]`
 
-  const results = await prisma.$queryRaw
+  const results = await prisma.$queryRaw<
     { content: string; similarity: number }[]
   >`
     SELECT content, 1 - (embedding <=> ${vectorLiteral}::vector) AS similarity

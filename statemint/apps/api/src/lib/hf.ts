@@ -86,7 +86,7 @@ async function hfFetch<T>(
 export async function categorizeTransaction(
   description: string
 ): Promise<{ category: string; confidence: number } | null> {
-  const result = await hfFetch<ZeroShotResult[]>(CATEGORIZATION_MODEL, {
+  const result = await hfFetch<ZeroShotResult>(CATEGORIZATION_MODEL, {
     inputs: description,
     parameters: {
       candidate_labels: TRANSACTION_CATEGORIES,
@@ -94,11 +94,11 @@ export async function categorizeTransaction(
     },
   })
 
-  if (!result || !Array.isArray(result) || result.length === 0) return null
+  if (!result || !result.labels?.length || !result.scores?.length) return null
 
   return {
-    category: result[0].label,
-    confidence: result[0].score,
+    category: result.labels[0],
+    confidence: result.scores[0],
   }
 }
 

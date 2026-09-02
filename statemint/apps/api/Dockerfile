@@ -14,4 +14,6 @@ RUN npx prisma generate
 COPY src ./src
 RUN npm run build
 
-CMD ["node", "dist/worker.js"]
+EXPOSE 4000
+
+CMD ["node", "dist/index.js"]
