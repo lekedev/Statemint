@@ -42,12 +42,12 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
       onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) uploadFile(f) }}
       onClick={() => !uploading && inputRef.current?.click()}
       style={{
-        border: `2px dashed ${dragging ? '#00D97E' : 'rgba(255,255,255,0.12)'}`,
+        border: `2px dashed ${dragging ? 'var(--green)' : 'var(--border-2)'}`,
         borderRadius: 14,
         padding: '36px 24px',
         textAlign: 'center',
         cursor: uploading ? 'default' : 'pointer',
-        background: dragging ? 'rgba(0,217,126,0.05)' : 'rgba(255,255,255,0.02)',
+        background: dragging ? 'var(--green-glow)' : 'var(--surface-2)',
         transition: 'all 0.2s',
       }}
     >
@@ -55,29 +55,29 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
       {uploading ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <Loader2 size={28} style={{ color: '#00D97E' }} className="animate-spin" />
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500, fontSize: 14 }}>Uploading and processing...</p>
+          <Loader2 size={28} style={{ color: 'var(--green)' }} className="animate-spin" />
+          <p style={{ color: 'var(--gray-1)', fontWeight: 500, fontSize: 14 }}>Uploading and processing...</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 52, height: 52,
-            background: 'rgba(0,217,126,0.10)',
+            background: 'var(--green-dim)',
             border: '1px solid rgba(0,217,126,0.20)',
             borderRadius: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Upload size={22} style={{ color: '#00D97E' }} />
+            <Upload size={22} style={{ color: 'var(--green)' }} />
           </div>
           <div>
-            <p style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>Drop your bank statement here</p>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 4 }}>or click to browse — PDF files only</p>
+            <p style={{ color: 'var(--white)', fontWeight: 600, fontSize: 15 }}>Drop your bank statement here</p>
+            <p style={{ color: 'var(--gray-2)', fontSize: 13, marginTop: 4 }}>or click to browse — PDF files only</p>
           </div>
         </div>
       )}
 
       {error && (
-        <p style={{ color: '#FF4D4D', fontSize: 13, marginTop: 12 }}>{error}</p>
+        <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{error}</p>
       )}
     </div>
   )
