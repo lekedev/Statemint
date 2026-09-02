@@ -4,6 +4,7 @@ interface StatCardProps {
   sub?: string
   positive?: boolean
   negative?: boolean
+  centered?: boolean
 }
 
 export default function StatCard({
@@ -12,18 +13,32 @@ export default function StatCard({
   sub,
   positive,
   negative,
+  centered,
 }: StatCardProps) {
+  const valueColor = positive ? 'var(--green)' : negative ? 'var(--red)' : 'var(--white)'
+
+  if (centered) {
+    return (
+      <div className="card" style={{ padding: '20px 16px', textAlign: 'center' }}>
+        <p style={{ fontSize: 32, fontWeight: 800, color: valueColor, letterSpacing: '-0.03em' }}>
+          {value}
+        </p>
+        <p style={{ fontSize: 11, color: 'var(--gray-3)', marginTop: 4, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          {label}
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div className="card">
-      <p className="text-sm text-gray-500 mb-1">{label}</p>
-      <p
-        className={`text-2xl font-bold ${
-          positive ? 'text-green-600' : negative ? 'text-red-600' : 'text-gray-900'
-        }`}
-      >
+    <div className="card" style={{ padding: 20 }}>
+      <p style={{ color: 'var(--gray-2)', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+        {label}
+      </p>
+      <p style={{ color: valueColor, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>
         {value}
       </p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      {sub && <p style={{ color: 'var(--gray-3)', fontSize: 12, marginTop: 4 }}>{sub}</p>}
     </div>
   )
 }
