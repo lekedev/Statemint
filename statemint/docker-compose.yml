@@ -45,7 +45,7 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://${POSTGRES_USER:-statemint}:${POSTGRES_PASSWORD:-statemint_secret}@postgres:5432/${POSTGRES_DB:-statemint_db}
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: $IDVuWRCmS48p6HbUF8rT6bvWidXHl7kti4yKGC0KEEl6YZ8YMe1onGPaQ6XI7JRu
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwtkey_changeinprod}
       JWT_EXPIRES_IN: 7d
       HF_API_TOKEN: ${HF_API_TOKEN}
       HF_CATEGORIZATION_MODEL: facebook/bart-large-mnli
