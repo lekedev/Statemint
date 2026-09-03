@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileText, TrendingUp, Calculator, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { FileText, TrendingUp, Calculator, CheckCircle, XCircle, Loader2, RotateCcw } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
 import UploadZone from '@/components/ui/UploadZone'
 import StatCard from '@/components/ui/StatCard'
@@ -53,6 +53,15 @@ export default function DashboardPage() {
   function handleUploadComplete(doc: Document) {
     setDocuments((prev) => [doc, ...prev])
     pollStatus(doc.id)
+  }
+
+  async function handleRetry(docId: string) {
+    try {
+      const res = await api.post(`/documents/${docId}/retry`)
+      const updated = res.data.data
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, ...updated } : d)))
+      pollStatus(docId)
+    } catch { /* leave the document showing its existing FAILED state */ }
   }
 
   async function pollStatus(docId: string) {
@@ -169,6 +178,19 @@ export default function DashboardPage() {
                     >
                       <Calculator size={12} />
                       <span>Tax</span>
+                    </button>
+                  </div>
+                )}
+
+                {doc.status === 'FAILED' && (
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button
+                      onClick={() => handleRetry(doc.id)}
+                      className="btn-secondary"
+                      style={{ padding: '7px 14px', fontSize: 12 }}
+                    >
+                      <RotateCcw size={12} />
+                      <span>Retry</span>
                     </button>
                   </div>
                 )}

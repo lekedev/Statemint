@@ -32,13 +32,6 @@ const upload = multer({
   },
 })
 
-// ─── File hash helper ─────────────────────────────────────────────────────────
-
-function hashFile(filePath: string): string {
-  const buffer = fs.readFileSync(filePath)
-  return crypto.createHash('sha256').update(buffer).digest('hex')
-}
-
 // ─── POST /documents/upload ───────────────────────────────────────────────────
 
 router.post(
@@ -56,7 +49,8 @@ router.post(
 
     const userId = req.user!.userId
     const filePath = req.file.path
-    const fileHash = hashFile(filePath)
+    const fileBytes = fs.readFileSync(filePath)
+    const fileHash = crypto.createHash('sha256').update(fileBytes).digest('hex')
 
     // Idempotency: same file hash = same document
     const existing = await prisma.document.findUnique({
@@ -85,13 +79,11 @@ router.post(
     }
 
     if (existing) {
-      // Read the fresh upload's bytes before discarding the duplicate file.
-      const fileBuffer = fs.readFileSync(filePath).toString('base64')
       fs.unlinkSync(filePath)
 
       const retried = await prisma.document.update({
         where: { id: existing.id },
-        data: { status: 'PENDING', errorMessage: null },
+        data: { status: 'PENDING', errorMessage: null, fileData: fileBytes },
       })
 
       await prisma.jobLog.create({
@@ -101,7 +93,7 @@ router.post(
       await parseQueue.add({
         documentId: retried.id,
         filePath: existing.filePath,
-        fileBuffer,
+        fileBuffer: fileBytes.toString('base64'),
         userId,
       })
 
@@ -119,6 +111,7 @@ router.post(
         fileName: req.file.originalname,
         fileHash,
         filePath,
+        fileData: fileBytes,
         status: 'PENDING',
       },
     })
@@ -131,7 +124,7 @@ router.post(
     await parseQueue.add({
       documentId: document.id,
       filePath,
-      fileBuffer: fs.readFileSync(filePath).toString('base64'),
+      fileBuffer: fileBytes.toString('base64'),
       userId,
     })
 
@@ -142,6 +135,53 @@ router.post(
     } satisfies ApiResponse<DocumentSummary>)
   }
 )
+
+// ─── POST /documents/:id/retry ─────────────────────────────────────────────────
+
+router.post('/:id/retry', authenticate, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId
+  const { id } = req.params
+
+  const document = await prisma.document.findFirst({ where: { id, userId } })
+
+  if (!document) {
+    res.status(404).json({
+      success: false,
+      error: 'Document not found',
+    } satisfies ApiResponse)
+    return
+  }
+
+  if (!document.fileData) {
+    res.status(400).json({
+      success: false,
+      error: 'No stored file to retry — please re-upload the statement.',
+    } satisfies ApiResponse)
+    return
+  }
+
+  const retried = await prisma.document.update({
+    where: { id: document.id },
+    data: { status: 'PENDING', errorMessage: null },
+  })
+
+  await prisma.jobLog.create({
+    data: { documentId: retried.id, jobType: 'PARSE', status: 'PENDING' },
+  })
+
+  await parseQueue.add({
+    documentId: retried.id,
+    filePath: document.filePath,
+    fileBuffer: document.fileData.toString('base64'),
+    userId,
+  })
+
+  res.status(202).json({
+    success: true,
+    data: formatDocument(retried),
+    message: 'Retrying statement processing.',
+  } satisfies ApiResponse<DocumentSummary>)
+})
 
 // ─── GET /documents ───────────────────────────────────────────────────────────
 

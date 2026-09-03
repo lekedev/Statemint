@@ -31,6 +31,7 @@ model Document {
   fileName     String         @map("file_name")
   fileHash     String         @unique @map("file_hash")
   filePath     String         @map("file_path")
+  fileData     Bytes?         @map("file_data")
   bankName     String?        @map("bank_name")
   status       DocumentStatus @default(PENDING)
   errorMessage String?        @map("error_message")
