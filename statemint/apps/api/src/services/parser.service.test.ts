@@ -87,6 +87,45 @@ describe('parsePdf', () => {
 
     vi.doUnmock('pdf-parse')
   })
+
+  it('extracts transactions from a concatenated-column wallet statement even when the bank is unrecognized', async () => {
+    vi.resetModules()
+    vi.doMock('pdf-parse', () => ({
+      default: vi.fn().mockResolvedValue({
+        text: [
+          'Wallet Account',
+          'Account Statement',
+          '',
+          '01 Aug 2026 08:21:5101 Aug 2026',
+          'OWealth Withdrawal(Transaction Payment)',
+          '--20,235.0020,235.00Mobile260801010201253026418548',
+          '01 Aug 2026 08:21:3401 Aug 2026',
+          'Third-Party Merchant Order | DEMERGE NIGERIA',
+          'LIMITED',
+          '20,235.00--0.00Mobile2608011403002527536838',
+          '51',
+        ].join('\n'),
+      }),
+    }))
+
+    const { parsePdf } = await import('./parser.service')
+    const result = await parsePdf('/fake/path.pdf')
+
+    expect(result.bankName).toBe('Unknown Bank')
+    expect(result.transactions).toHaveLength(2)
+    expect(result.transactions[0]).toMatchObject({
+      description: 'OWealth Withdrawal(Transaction Payment)',
+      amount: 20_235,
+      type: 'CREDIT',
+    })
+    expect(result.transactions[1]).toMatchObject({
+      description: 'Third-Party Merchant Order | DEMERGE NIGERIA LIMITED',
+      amount: 20_235,
+      type: 'DEBIT',
+    })
+
+    vi.doUnmock('pdf-parse')
+  })
 })
 
 describe('chunkText', () => {

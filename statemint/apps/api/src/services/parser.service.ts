@@ -36,7 +36,7 @@ export const SUPPORTED_BANKS = [
 // from bank names appearing in transaction descriptions
 
 function detectBank(text: string): string {
-  const header = text.slice(0, 500).toLowerCase()
+  const header = text.slice(0, 1500).toLowerCase()
 
   if (header.includes('kuda')) return 'Kuda Bank'
   if (header.includes('guaranty trust') || header.includes('gtbank')) return 'GTBank'
@@ -230,6 +230,83 @@ function parseGeneric(text: string): ParsedTransaction[] {
   return transactions
 }
 
+// ─── Concatenated-column wallet parser ─────────────────────────────────────────
+// Some fintech wallet statements (e.g. OPay) export tables whose columns get
+// squashed together with no separator once pdf-parse flattens them to text.
+// Each row looks like:
+//   DD Mon YYYY HH:MM:SSDD Mon YYYY      <- trans datetime + value date, no gap
+//   Description text (may wrap to 2+ lines)
+//   (--|amount)(--|amount)(amount)Channel<reference noise, may wrap>
+// The three leading amount-or-"--" groups are Debit, Credit, Balance After, in
+// that fixed column order — so type is read from which column is populated,
+// never guessed from the description text.
+
+const WALLET_START =
+  /^(\d{2}\s[A-Za-z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2})(\d{2}\s[A-Za-z]{3}\s\d{4})$/
+const WALLET_AMOUNTS = /^(--|[\d,]+\.\d{2})(--|[\d,]+\.\d{2})([\d,]+\.\d{2})/
+
+function parseConcatenatedTable(text: string): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = []
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+
+  let i = 0
+  while (i < lines.length) {
+    const startMatch = WALLET_START.exec(lines[i])
+    if (!startMatch) {
+      i++
+      continue
+    }
+
+    const datePortion = startMatch[1].match(/^\d{2}\s[A-Za-z]{3}\s\d{4}/)![0]
+    const date = parseDate(datePortion)
+
+    let j = i + 1
+    const descLines: string[] = []
+    while (j < lines.length && !WALLET_AMOUNTS.test(lines[j])) {
+      if (WALLET_START.test(lines[j])) break
+      descLines.push(lines[j])
+      j++
+    }
+
+    if (j < lines.length && WALLET_AMOUNTS.test(lines[j])) {
+      const amountsMatch = WALLET_AMOUNTS.exec(lines[j])!
+      const [, debitRaw, creditRaw] = amountsMatch
+      const isCredit = creditRaw !== '--'
+      const amount = parseAmount(isCredit ? creditRaw : debitRaw)
+      const type: 'DEBIT' | 'CREDIT' = isCredit ? 'CREDIT' : 'DEBIT'
+      const description = descLines
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200)
+
+      // Consume trailing channel/reference noise up to the next transaction.
+      let k = j + 1
+      while (k < lines.length && !WALLET_START.test(lines[k])) k++
+
+      if (amount > 0 && description.length > 0) {
+        transactions.push({
+          date,
+          description,
+          amount,
+          type,
+          rawText: [lines[i], ...descLines, lines[j]].join(' '),
+        })
+      }
+
+      i = k
+      continue
+    }
+
+    i++
+  }
+
+  return transactions
+}
+
 // ─── Main parser ──────────────────────────────────────────────────────────────
 
 export async function parsePdf(filePath: string): Promise<ParserResult> {
@@ -239,22 +316,22 @@ export async function parsePdf(filePath: string): Promise<ParserResult> {
 
   const bankName = detectBank(rawText)
 
-  // Route to the right parser based on bank
-  let transactions: ParsedTransaction[] = []
-
-  switch (bankName) {
-    case 'Kuda Bank':
-    case 'Opay':
-    case 'Palmpay':
-      transactions = parseKuda(rawText)
-      break
-    default:
-      transactions = parseGeneric(rawText)
-      break
-  }
+  // Extraction never gates on which bank was detected — bank identity is
+  // unreliable to detect and statements from the same bank can still vary
+  // by layout. Every strategy runs unconditionally; whichever extracts the
+  // most transactions wins.
+  const candidates = [
+    parseKuda(rawText),
+    parseGeneric(rawText),
+    parseConcatenatedTable(rawText),
+  ]
+  const transactions = candidates.reduce((best, current) =>
+    current.length > best.length ? current : best
+  )
 
   console.log(
-    `[Parser] Bank: ${bankName} | Extracted ${transactions.length} transactions`
+    `[Parser] Bank: ${bankName} | Extracted ${transactions.length} transactions ` +
+      `(candidates: ${candidates.map((c) => c.length).join('/')})`
   )
 
   return { bankName, transactions, rawText }
