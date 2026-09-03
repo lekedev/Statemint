@@ -5,20 +5,18 @@
  */
 
 const HF_API_BASE = 'https://router.huggingface.co/hf-inference/models'
-// Sentence-transformer models default to the sentence-similarity pipeline on
-// the Hub, which expects a { source_sentence, sentences } payload rather
-// than a plain embedding request — forcing the feature-extraction pipeline
-// via this path is what actually returns an embedding vector.
-const HF_FEATURE_EXTRACTION_BASE =
-  'https://router.huggingface.co/hf-inference/pipeline/feature-extraction'
 const HF_API_TOKEN = process.env.HF_API_TOKEN || ''
 
 const CATEGORIZATION_MODEL =
   process.env.HF_CATEGORIZATION_MODEL || 'facebook/bart-large-mnli'
 
+// sentence-transformers/all-MiniLM-L6-v2 is tagged for HF's sentence-
+// similarity pipeline, not feature-extraction, and errors on every plain
+// embedding request regardless of URL — bge-small-en-v1.5 is confirmed
+// working on HF's free hf-inference provider and outputs the same 384
+// dimensions the vector(384) column expects.
 const EMBEDDING_MODEL =
-  process.env.HF_EMBEDDING_MODEL ||
-  'sentence-transformers/all-MiniLM-L6-v2'
+  process.env.HF_EMBEDDING_MODEL || 'BAAI/bge-small-en-v1.5'
 
 export const TRANSACTION_CATEGORIES = [
   'Food & Dining',
@@ -151,7 +149,7 @@ export async function generateEmbedding(
   text: string
 ): Promise<number[] | null> {
   const result = await hfFetch<number[]>(
-    `${HF_FEATURE_EXTRACTION_BASE}/${EMBEDDING_MODEL}`,
+    `${HF_API_BASE}/${EMBEDDING_MODEL}`,
     { inputs: text }
   )
   return result
