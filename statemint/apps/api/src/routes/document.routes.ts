@@ -63,13 +63,44 @@ router.post(
       where: { fileHash },
     })
 
-    if (existing) {
+    if (existing && existing.status !== 'FAILED') {
       // Clean up duplicate file
       fs.unlinkSync(filePath)
       res.status(200).json({
         success: true,
         data: formatDocument(existing),
         message: 'This statement has already been uploaded',
+      } satisfies ApiResponse<DocumentSummary>)
+      return
+    }
+
+    if (existing) {
+      // A previous attempt at this file failed (e.g. transient infra issue) —
+      // retry it instead of replaying the stale failed record forever. Read
+      // the fresh upload's bytes before discarding the duplicate file.
+      const fileBuffer = fs.readFileSync(filePath).toString('base64')
+      fs.unlinkSync(filePath)
+
+      const retried = await prisma.document.update({
+        where: { id: existing.id },
+        data: { status: 'PENDING', errorMessage: null },
+      })
+
+      await prisma.jobLog.create({
+        data: { documentId: retried.id, jobType: 'PARSE', status: 'PENDING' },
+      })
+
+      await parseQueue.add({
+        documentId: retried.id,
+        filePath: existing.filePath,
+        fileBuffer,
+        userId,
+      })
+
+      res.status(202).json({
+        success: true,
+        data: formatDocument(retried),
+        message: 'Retrying statement processing.',
       } satisfies ApiResponse<DocumentSummary>)
       return
     }
