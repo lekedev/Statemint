@@ -219,15 +219,15 @@ describe('parsePdf', () => {
     vi.doUnmock('pdf-parse')
   })
 
-  it('falls back to Claude when no regex parser extracts anything', async () => {
+  it('falls back to Gemini when no regex parser extracts anything', async () => {
     vi.resetModules()
     vi.doMock('pdf-parse', () => ({
       default: vi.fn().mockResolvedValue({
         text: 'Some Brand New Bank Statement\n\nan entirely unrecognized layout',
       }),
     }))
-    vi.doMock('../lib/claude', () => ({
-      extractTransactionsWithClaude: vi.fn().mockResolvedValue({
+    vi.doMock('../lib/gemini', () => ({
+      extractTransactionsWithGemini: vi.fn().mockResolvedValue({
         bankName: 'Providus Bank',
         transactions: [
           {
@@ -248,10 +248,10 @@ describe('parsePdf', () => {
     expect(result.transactions[0]).toMatchObject({ amount: 5_000, type: 'DEBIT' })
 
     vi.doUnmock('pdf-parse')
-    vi.doUnmock('../lib/claude')
+    vi.doUnmock('../lib/gemini')
   })
 
-  it('never calls Claude when a regex parser already found transactions', async () => {
+  it('never calls Gemini when a regex parser already found transactions', async () => {
     vi.resetModules()
     vi.doMock('pdf-parse', () => ({
       default: vi.fn().mockResolvedValue({
@@ -261,16 +261,16 @@ describe('parsePdf', () => {
         ].join('\n'),
       }),
     }))
-    const extractTransactionsWithClaude = vi.fn()
-    vi.doMock('../lib/claude', () => ({ extractTransactionsWithClaude }))
+    const extractTransactionsWithGemini = vi.fn()
+    vi.doMock('../lib/gemini', () => ({ extractTransactionsWithGemini }))
 
     const { parsePdf } = await import('./parser.service')
     await parsePdf('/fake/path.pdf')
 
-    expect(extractTransactionsWithClaude).not.toHaveBeenCalled()
+    expect(extractTransactionsWithGemini).not.toHaveBeenCalled()
 
     vi.doUnmock('pdf-parse')
-    vi.doUnmock('../lib/claude')
+    vi.doUnmock('../lib/gemini')
   })
 })
 

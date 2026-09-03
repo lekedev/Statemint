@@ -1,7 +1,7 @@
 import fs from 'fs'
 import pdfParse from 'pdf-parse'
 import { ParsedTransaction } from '../types'
-import { extractTransactionsWithClaude } from '../lib/claude'
+import { extractTransactionsWithGemini } from '../lib/gemini'
 
 interface ParserResult {
   bankName: string
@@ -553,12 +553,12 @@ export async function parsePdf(filePath: string): Promise<ParserResult> {
   // LLM extraction, which generalizes to statement formats no parser here
   // was built for, instead of failing outright.
   if (transactions.length === 0) {
-    const claudeResult = await extractTransactionsWithClaude(rawText)
-    if (claudeResult && claudeResult.transactions.length > 0) {
-      transactions = claudeResult.transactions
-      if (finalBankName === 'Unknown Bank') finalBankName = claudeResult.bankName
+    const geminiResult = await extractTransactionsWithGemini(rawText)
+    if (geminiResult && geminiResult.transactions.length > 0) {
+      transactions = geminiResult.transactions
+      if (finalBankName === 'Unknown Bank') finalBankName = geminiResult.bankName
       console.log(
-        `[Parser] Claude fallback extracted ${transactions.length} transactions`
+        `[Parser] Gemini fallback extracted ${transactions.length} transactions`
       )
     }
   }
