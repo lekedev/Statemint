@@ -10,6 +10,8 @@ import { Document } from '@/types'
 import { formatDate, getStatusLabel } from '@/lib/utils'
 import api from '@/lib/api'
 
+const PROCESSING_STATUSES = ['PENDING', 'PARSING', 'CATEGORIZING', 'EMBEDDING']
+
 const STATUS_COLORS: Record<string, string> = {
   COMPLETED: '#00D97E',
   FAILED: '#FF4D4D',
@@ -37,7 +39,11 @@ export default function DashboardPage() {
   const fetchDocuments = useCallback(async () => {
     try {
       const res = await api.get('/documents')
-      setDocuments(res.data.data || [])
+      const docs: Document[] = res.data.data || []
+      setDocuments(docs)
+      docs
+        .filter((d) => PROCESSING_STATUSES.includes(d.status))
+        .forEach((d) => pollStatus(d.id))
     } catch { /* auth interceptor handles */ }
     finally { setLoading(false) }
   }, [])
@@ -61,9 +67,7 @@ export default function DashboardPage() {
   }
 
   const completed = documents.filter((d) => d.status === 'COMPLETED').length
-  const processing = documents.filter((d) =>
-    ['PENDING', 'PARSING', 'CATEGORIZING', 'EMBEDDING'].includes(d.status)
-  ).length
+  const processing = documents.filter((d) => PROCESSING_STATUSES.includes(d.status)).length
 
   return (
     <AppShell>
