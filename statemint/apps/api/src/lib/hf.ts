@@ -57,8 +57,23 @@ async function hfFetch<T>(
         body: JSON.stringify(payload),
       })
 
+      const bodyText = await res.text()
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(bodyText)
+      } catch {
+        // The API (or something in front of it, e.g. a CDN error page) sent
+        // back non-JSON — retrying the identical request won't fix that, so
+        // log enough of the body to diagnose it and stop immediately.
+        console.error(
+          `[HF] Non-JSON response (status ${res.status}):`,
+          bodyText.slice(0, 300)
+        )
+        return null
+      }
+
       if (!res.ok) {
-        const err = (await res.json()) as HFError
+        const err = parsed as HFError
 
         // Model loading — wait and retry
         if (res.status === 503 && err.estimated_time && attempt < retries) {
@@ -74,7 +89,7 @@ async function hfFetch<T>(
         return null
       }
 
-      return (await res.json()) as T
+      return parsed as T
     } catch (err) {
       console.error(`[HF] Fetch error (attempt ${attempt + 1}):`, err)
       if (attempt === retries) return null

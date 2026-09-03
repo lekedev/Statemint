@@ -17,11 +17,12 @@ describe('categorizeTransaction', () => {
   it('reads the top label and score from the real HF zero-shot response shape', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        sequence: 'POS Purchase SHOPRITE',
-        labels: ['Shopping & Retail', 'Food & Dining', 'Other'],
-        scores: [0.87, 0.09, 0.04],
-      }),
+      text: async () =>
+        JSON.stringify({
+          sequence: 'POS Purchase SHOPRITE',
+          labels: ['Shopping & Retail', 'Food & Dining', 'Other'],
+          scores: [0.87, 0.09, 0.04],
+        }),
     }) as unknown as typeof fetch
 
     const { categorizeTransaction } = await import('./hf')
@@ -34,12 +35,27 @@ describe('categorizeTransaction', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
-      json: async () => ({ error: 'Internal error' }),
+      text: async () => JSON.stringify({ error: 'Internal error' }),
     }) as unknown as typeof fetch
 
     const { categorizeTransaction } = await import('./hf')
     const result = await categorizeTransaction('anything')
 
     expect(result).toBeNull()
+  })
+
+  it('returns null without retrying when the response body is not JSON', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () => '<html><body>Too Many Requests</body></html>',
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    const { categorizeTransaction } = await import('./hf')
+    const result = await categorizeTransaction('anything')
+
+    expect(result).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
