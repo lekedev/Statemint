@@ -7,7 +7,8 @@ import crypto from 'crypto'
 import { prisma } from './lib/prisma'
 import { parseQueue, categorizeQueue, embedQueue } from './lib/queues'
 import { parsePdf, chunkText } from './services/parser.service'
-import { categorizeBatch, generateEmbeddings } from './lib/hf'
+import { generateEmbeddings } from './lib/hf'
+import { categorizeBatchByRules } from './services/categorize.service'
 import { ParseJobData, CategorizeJobData, EmbedJobData } from './types'
 
 console.log('[Worker] Statemint pipeline worker starting...')
@@ -121,7 +122,7 @@ categorizeQueue.process(async (job: Bull.Job<CategorizeJobData>) => {
     })
 
     const descriptions = transactions.map((t) => t.description)
-    const results = await categorizeBatch(descriptions)
+    const results = categorizeBatchByRules(descriptions)
 
     await prisma.$transaction(
       transactions.map((t: (typeof transactions)[number], i: number) => {
