@@ -5,7 +5,7 @@ import os from 'os'
 import path from 'path'
 import crypto from 'crypto'
 import { prisma } from './lib/prisma'
-import { parseQueue, categorizeQueue, embedQueue } from './lib/queues'
+import { parseQueue, categorizeQueue, embedQueue, closeQueues } from './lib/queues'
 import { parsePdf, chunkText } from './services/parser.service'
 import { generateEmbeddings } from './lib/hf'
 import { categorizeBatchByRules } from './services/categorize.service'
@@ -260,12 +260,17 @@ embedQueue.process(async (job: Bull.Job<EmbedJobData>) => {
 
 process.on('SIGTERM', async () => {
   console.log('[Worker] SIGTERM received, shutting down...')
+  // Release any in-flight job's Bull lock cleanly — otherwise a redeploy
+  // mid-job lets the lock expire on its own, and a job that stalls this
+  // way more than once is permanently marked failed rather than retried.
+  await closeQueues()
   await prisma.$disconnect()
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
   console.log('[Worker] SIGINT received, shutting down...')
+  await closeQueues()
   await prisma.$disconnect()
   process.exit(0)
 })

@@ -5,6 +5,12 @@
  */
 
 const HF_API_BASE = 'https://router.huggingface.co/hf-inference/models'
+// Sentence-transformer models default to the sentence-similarity pipeline on
+// the Hub, which expects a { source_sentence, sentences } payload rather
+// than a plain embedding request — forcing the feature-extraction pipeline
+// via this path is what actually returns an embedding vector.
+const HF_FEATURE_EXTRACTION_BASE =
+  'https://router.huggingface.co/hf-inference/pipeline/feature-extraction'
 const HF_API_TOKEN = process.env.HF_API_TOKEN || ''
 
 const CATEGORIZATION_MODEL =
@@ -42,13 +48,13 @@ interface HFError {
 }
 
 async function hfFetch<T>(
-  model: string,
+  url: string,
   payload: Record<string, unknown>,
   retries = 2
 ): Promise<T | null> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(`${HF_API_BASE}/${model}`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${HF_API_TOKEN}`,
@@ -101,13 +107,16 @@ async function hfFetch<T>(
 export async function categorizeTransaction(
   description: string
 ): Promise<{ category: string; confidence: number } | null> {
-  const result = await hfFetch<ZeroShotResult>(CATEGORIZATION_MODEL, {
-    inputs: description,
-    parameters: {
-      candidate_labels: TRANSACTION_CATEGORIES,
-      multi_label: false,
-    },
-  })
+  const result = await hfFetch<ZeroShotResult>(
+    `${HF_API_BASE}/${CATEGORIZATION_MODEL}`,
+    {
+      inputs: description,
+      parameters: {
+        candidate_labels: TRANSACTION_CATEGORIES,
+        multi_label: false,
+      },
+    }
+  )
 
   if (!result || !result.labels?.length || !result.scores?.length) return null
 
@@ -141,9 +150,10 @@ export async function categorizeBatch(
 export async function generateEmbedding(
   text: string
 ): Promise<number[] | null> {
-  const result = await hfFetch<number[]>(EMBEDDING_MODEL, {
-    inputs: text,
-  })
+  const result = await hfFetch<number[]>(
+    `${HF_FEATURE_EXTRACTION_BASE}/${EMBEDDING_MODEL}`,
+    { inputs: text }
+  )
   return result
 }
 
