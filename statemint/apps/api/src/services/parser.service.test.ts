@@ -218,6 +218,60 @@ describe('parsePdf', () => {
 
     vi.doUnmock('pdf-parse')
   })
+
+  it('falls back to Claude when no regex parser extracts anything', async () => {
+    vi.resetModules()
+    vi.doMock('pdf-parse', () => ({
+      default: vi.fn().mockResolvedValue({
+        text: 'Some Brand New Bank Statement\n\nan entirely unrecognized layout',
+      }),
+    }))
+    vi.doMock('../lib/claude', () => ({
+      extractTransactionsWithClaude: vi.fn().mockResolvedValue({
+        bankName: 'Providus Bank',
+        transactions: [
+          {
+            date: new Date('2026-08-01'),
+            description: 'POS Purchase',
+            amount: 5_000,
+            type: 'DEBIT',
+          },
+        ],
+      }),
+    }))
+
+    const { parsePdf } = await import('./parser.service')
+    const result = await parsePdf('/fake/path.pdf')
+
+    expect(result.bankName).toBe('Providus Bank')
+    expect(result.transactions).toHaveLength(1)
+    expect(result.transactions[0]).toMatchObject({ amount: 5_000, type: 'DEBIT' })
+
+    vi.doUnmock('pdf-parse')
+    vi.doUnmock('../lib/claude')
+  })
+
+  it('never calls Claude when a regex parser already found transactions', async () => {
+    vi.resetModules()
+    vi.doMock('pdf-parse', () => ({
+      default: vi.fn().mockResolvedValue({
+        text: [
+          'GTBank e-Statement',
+          '01/03/2026 POS Purchase SHOPRITE 15,000.00 DR',
+        ].join('\n'),
+      }),
+    }))
+    const extractTransactionsWithClaude = vi.fn()
+    vi.doMock('../lib/claude', () => ({ extractTransactionsWithClaude }))
+
+    const { parsePdf } = await import('./parser.service')
+    await parsePdf('/fake/path.pdf')
+
+    expect(extractTransactionsWithClaude).not.toHaveBeenCalled()
+
+    vi.doUnmock('pdf-parse')
+    vi.doUnmock('../lib/claude')
+  })
 })
 
 describe('chunkText', () => {

@@ -1,6 +1,7 @@
 import fs from 'fs'
 import pdfParse from 'pdf-parse'
 import { ParsedTransaction } from '../types'
+import { extractTransactionsWithClaude } from '../lib/claude'
 
 interface ParserResult {
   bankName: string
@@ -538,16 +539,31 @@ export async function parsePdf(filePath: string): Promise<ParserResult> {
     parseTrailingBalanceLedger(rawText),
     parseThreeColumnLedger(rawText),
   ]
-  const transactions = candidates.reduce((best, current) =>
+  let transactions = candidates.reduce((best, current) =>
     current.length > best.length ? current : best
   )
+  let finalBankName = bankName
 
   console.log(
     `[Parser] Bank: ${bankName} | Extracted ${transactions.length} transactions ` +
       `(candidates: ${candidates.map((c) => c.length).join('/')})`
   )
 
-  return { bankName, transactions, rawText }
+  // None of the hand-written parsers recognized this layout — fall back to
+  // LLM extraction, which generalizes to statement formats no parser here
+  // was built for, instead of failing outright.
+  if (transactions.length === 0) {
+    const claudeResult = await extractTransactionsWithClaude(rawText)
+    if (claudeResult && claudeResult.transactions.length > 0) {
+      transactions = claudeResult.transactions
+      if (finalBankName === 'Unknown Bank') finalBankName = claudeResult.bankName
+      console.log(
+        `[Parser] Claude fallback extracted ${transactions.length} transactions`
+      )
+    }
+  }
+
+  return { bankName: finalBankName, transactions, rawText }
 }
 
 // ─── Text chunker ─────────────────────────────────────────────────────────────
