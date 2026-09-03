@@ -126,6 +126,63 @@ describe('parsePdf', () => {
 
     vi.doUnmock('pdf-parse')
   })
+
+  it('extracts transactions from a trailing-balance ledger and detects Kuda from footer text', async () => {
+    vi.resetModules()
+    vi.doMock('pdf-parse', () => ({
+      default: vi.fn().mockResolvedValue({
+        text: [
+          'Opening Balance',
+          '₦64.78',
+          '12/05/26',
+          '10:42:14',
+          '₦100,000.00inward',
+          'transfer',
+          'Some Company Ltd/1310771808/Some Bank Plc',
+          'salary₦100,064.78',
+          '14/05/26',
+          '08:40:46',
+          '₦40,000.00outward',
+          'transfer',
+          'Jane Doe/9123361463/Some Bank',
+          'savings₦60,064.78',
+          '18/05/26',
+          '14:43:41',
+          '₦1,000.00outward',
+          'transfer',
+          'reversal of groceries₦61,064.78',
+          '02/09/26',
+          '18:51:28',
+          '₦1,500.00airtimeairtime purchase',
+          '2349066276550',
+          '₦59,564.78',
+          'Kuda MF Bank (RC796975). All rights reserved.',
+          'Kuda MF Bank is licensed by the Central Bank of Nigeria.',
+          'Page 1 of 1',
+        ].join('\n'),
+      }),
+    }))
+
+    const { parsePdf } = await import('./parser.service')
+    const result = await parsePdf('/fake/path.pdf')
+
+    expect(result.bankName).toBe('Kuda Bank')
+    expect(result.transactions).toHaveLength(4)
+    expect(result.transactions[0]).toMatchObject({ amount: 100_000, type: 'CREDIT' })
+    expect(result.transactions[1]).toMatchObject({ amount: 40_000, type: 'DEBIT' })
+    expect(result.transactions[2]).toMatchObject({
+      description: 'reversal of groceries',
+      amount: 1_000,
+      type: 'CREDIT',
+    })
+    expect(result.transactions[3]).toMatchObject({
+      description: 'airtimeairtime purchase 2349066276550',
+      amount: 1_500,
+      type: 'DEBIT',
+    })
+
+    vi.doUnmock('pdf-parse')
+  })
 })
 
 describe('chunkText', () => {

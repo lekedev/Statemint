@@ -36,7 +36,14 @@ export const SUPPORTED_BANKS = [
 // from bank names appearing in transaction descriptions
 
 function detectBank(text: string): string {
-  const header = text.slice(0, 1500).toLowerCase()
+  // Kuda's page-footer legal text ("Kuda MF Bank (RC...", "trademarks of Kuda
+  // Technologies") is a far more reliable signal than a header substring —
+  // it's unambiguously the issuer's own boilerplate, not something a
+  // counterparty transaction description could plausibly contain, so it's
+  // safe to check across the whole document rather than just the header.
+  if (/kuda mf bank|kuda technologies/i.test(text)) return 'Kuda Bank'
+
+  const header = text.slice(0, 500).toLowerCase()
 
   if (header.includes('kuda')) return 'Kuda Bank'
   if (header.includes('guaranty trust') || header.includes('gtbank')) return 'GTBank'
@@ -307,6 +314,135 @@ function parseConcatenatedTable(text: string): ParsedTransaction[] {
   return transactions
 }
 
+// ─── Trailing-balance ledger parser ────────────────────────────────────────────
+// A single-amount-per-row layout (seen in Kuda's newer statement export):
+//   DD/MM/YY
+//   HH:MM:SS
+//   ₦AMOUNT + direction word, concatenated (e.g. "₦40,000.00outward")
+//   "transfer" (only present for plain inward/outward transfers)
+//   description lines (counterparty details, may wrap)
+//   [category tag]₦BALANCE, concatenated — marks the block's end
+// Some rows collapse everything onto the amount line itself:
+//   ₦20,000.00phone - credit₦2,391.03
+//
+// The "inward"/"outward" label is usually reliable, but verified against
+// real statement data it mislabels a few internal-movement categories as
+// "outward" even though they add money back (a reversal, a flexible-savings
+// or fixed-savings-pot withdrawal into the main wallet, a savings-account
+// closure refund) — those are recognized by keyword and reclassified.
+const CREDIT_KEYWORDS = /reversal|withdrawal|closure/i
+
+const LEDGER_BOILERPLATE = [
+  /kuda mf bank/i,
+  /licensed by the central bank/i,
+  /commercial avenue/i,
+  /finsbury pavement/i,
+  /^page \d+ of \d+$/i,
+]
+const LEDGER_DATE_LINE = /^\d{2}\/\d{2}\/\d{2}$/
+const LEDGER_TIME_LINE = /^\d{2}:\d{2}:\d{2}$/
+const LEDGER_AMOUNT_TYPE_LINE = /^₦([\d,]+\.\d{2})([A-Za-z].*)$/
+const LEDGER_TRAILING_BALANCE = /^(.*)₦([\d,]+\.\d{2})$/
+
+function parseTrailingBalanceLedger(text: string): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = []
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !LEDGER_BOILERPLATE.some((p) => p.test(l)))
+
+  let i = 0
+  while (i < lines.length) {
+    if (!LEDGER_DATE_LINE.test(lines[i])) {
+      i++
+      continue
+    }
+    const dateLine = lines[i]
+    if (i + 1 >= lines.length || !LEDGER_TIME_LINE.test(lines[i + 1])) {
+      i++
+      continue
+    }
+    if (i + 2 >= lines.length) {
+      i++
+      continue
+    }
+    const amtMatch = LEDGER_AMOUNT_TYPE_LINE.exec(lines[i + 2])
+    if (!amtMatch) {
+      i++
+      continue
+    }
+
+    const amount = parseAmount(amtMatch[1])
+    const typeSuffix = amtMatch[2]
+
+    // Some rows collapse type + description + balance onto this one line.
+    const inlineMatch = LEDGER_TRAILING_BALANCE.exec(typeSuffix)
+    if (inlineMatch) {
+      const description = inlineMatch[1].replace(/\s+/g, ' ').trim().slice(0, 200)
+      const type: 'DEBIT' | 'CREDIT' = CREDIT_KEYWORDS.test(description)
+        ? 'CREDIT'
+        : 'DEBIT'
+      if (amount > 0 && description.length > 0) {
+        transactions.push({
+          date: parseDate(dateLine),
+          description,
+          amount,
+          type,
+          rawText: `${dateLine} ${lines[i + 2]}`,
+        })
+      }
+      i = i + 3
+      continue
+    }
+
+    let j = i + 3
+    const descParts: string[] = []
+    const bareDirection =
+      typeSuffix.toLowerCase() === 'inward' || typeSuffix.toLowerCase() === 'outward'
+    if (!bareDirection) descParts.push(typeSuffix)
+    else if (j < lines.length && lines[j].toLowerCase() === 'transfer') j++
+
+    let matchedBalance: string | null = null
+    while (j < lines.length) {
+      if (LEDGER_DATE_LINE.test(lines[j])) break
+      const balMatch = LEDGER_TRAILING_BALANCE.exec(lines[j])
+      if (balMatch) {
+        if (balMatch[1]) descParts.push(balMatch[1])
+        matchedBalance = balMatch[2]
+        j++
+        break
+      }
+      descParts.push(lines[j])
+      j++
+    }
+
+    if (matchedBalance === null) {
+      i++
+      continue
+    }
+
+    const description = descParts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+    let type: 'DEBIT' | 'CREDIT' = typeSuffix.toLowerCase().startsWith('inward')
+      ? 'CREDIT'
+      : 'DEBIT'
+    if (CREDIT_KEYWORDS.test(description)) type = 'CREDIT'
+
+    if (amount > 0 && description.length > 0) {
+      transactions.push({
+        date: parseDate(dateLine),
+        description,
+        amount,
+        type,
+        rawText: `${dateLine} ${lines[i + 2]} ${description}`,
+      })
+    }
+
+    i = j
+  }
+
+  return transactions
+}
+
 // ─── Main parser ──────────────────────────────────────────────────────────────
 
 export async function parsePdf(filePath: string): Promise<ParserResult> {
@@ -324,6 +460,7 @@ export async function parsePdf(filePath: string): Promise<ParserResult> {
     parseKuda(rawText),
     parseGeneric(rawText),
     parseConcatenatedTable(rawText),
+    parseTrailingBalanceLedger(rawText),
   ]
   const transactions = candidates.reduce((best, current) =>
     current.length > best.length ? current : best
