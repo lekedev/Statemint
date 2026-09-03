@@ -92,6 +92,7 @@ router.post(
     await parseQueue.add({
       documentId: document.id,
       filePath,
+      fileBuffer: fs.readFileSync(filePath).toString('base64'),
       userId,
     })
 

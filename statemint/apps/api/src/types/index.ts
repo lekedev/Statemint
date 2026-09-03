@@ -105,6 +105,7 @@ export interface ChatResponse {
 export interface ParseJobData {
   documentId: string
   filePath: string
+  fileBuffer: string
   userId: string
 }
 

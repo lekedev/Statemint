@@ -1,5 +1,9 @@
 import 'dotenv/config'
 import Bull from 'bull'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import crypto from 'crypto'
 import { prisma } from './lib/prisma'
 import { parseQueue, categorizeQueue, embedQueue } from './lib/queues'
 import { parsePdf, chunkText } from './services/parser.service'
@@ -11,7 +15,7 @@ console.log('[Worker] Statemint pipeline worker starting...')
 // ─── Parse Worker ─────────────────────────────────────────────────────────────
 
 parseQueue.process(async (job: Bull.Job<ParseJobData>) => {
-  const { documentId, filePath } = job.data as ParseJobData
+  const { documentId, fileBuffer } = job.data as ParseJobData
   console.log(`[Parse] Starting document ${documentId}`)
 
   await prisma.document.update({
@@ -24,8 +28,17 @@ parseQueue.process(async (job: Bull.Job<ParseJobData>) => {
     data: { status: 'RUNNING', startedAt: new Date() },
   })
 
+  // The worker runs in a separate container from the api service, so the
+  // upload's on-disk path isn't reachable here — the job carries the file
+  // bytes instead, written out to a scratch file local to this container.
+  const tempFilePath = path.join(
+    os.tmpdir(),
+    `${documentId}-${crypto.randomBytes(6).toString('hex')}.pdf`
+  )
+
   try {
-    const { bankName, transactions } = await parsePdf(filePath)
+    fs.writeFileSync(tempFilePath, Buffer.from(fileBuffer, 'base64'))
+    const { bankName, transactions } = await parsePdf(tempFilePath)
 
     await prisma.document.update({
       where: { id: documentId },
@@ -79,6 +92,8 @@ parseQueue.process(async (job: Bull.Job<ParseJobData>) => {
     })
 
     throw err
+  } finally {
+    fs.rmSync(tempFilePath, { force: true })
   }
 })
 
