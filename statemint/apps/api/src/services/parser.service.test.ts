@@ -183,6 +183,41 @@ describe('parsePdf', () => {
 
     vi.doUnmock('pdf-parse')
   })
+
+  it('extracts transactions from a three-column ledger and detects Access Bank from footer text', async () => {
+    vi.resetModules()
+    vi.doMock('pdf-parse', () => ({
+      default: vi.fn().mockResolvedValue({
+        text: [
+          'ACCOUNT STATEMENT',
+          'Posted DateValue DateDescriptionDebit (NGN)Credit (NGN)Balance (NGN)',
+          '03-AUG-2603-AUG-26Opening Balance-0.003,226.53',
+          '07-AUG-2607-AUG-26SMS Alert Fee-29/06-28/07/2026 + VAT9.76-3,216.77',
+          '10-AUG-2610-AUG-26MOBILE TRF TO PAY/ /JOHN DOE3,000.00-216.77',
+          '30-AUG-2629-AUG-26FGN Stamp Duty for 3 txns 23/08-29/08/26150.00-29,917.33',
+          '31-AUG-2601-SEP-26CREDIT INTEREST CAPITALIZATION-41.9629,959.29',
+          'This is an automated transaction alert service. For enquiries call',
+          '2802500, +234 0201-2712500-7 or send an email to contactcenter@accessbankplc.com',
+        ].join('\n'),
+      }),
+    }))
+
+    const { parsePdf } = await import('./parser.service')
+    const result = await parsePdf('/fake/path.pdf')
+
+    expect(result.bankName).toBe('Access Bank')
+    expect(result.transactions).toHaveLength(4)
+    expect(result.transactions[0]).toMatchObject({ amount: 9.76, type: 'DEBIT' })
+    expect(result.transactions[1]).toMatchObject({ amount: 3_000, type: 'DEBIT' })
+    expect(result.transactions[2]).toMatchObject({
+      description: 'FGN Stamp Duty for 3 txns 23/08-29/08/26',
+      amount: 150,
+      type: 'DEBIT',
+    })
+    expect(result.transactions[3]).toMatchObject({ amount: 41.96, type: 'CREDIT' })
+
+    vi.doUnmock('pdf-parse')
+  })
 })
 
 describe('chunkText', () => {

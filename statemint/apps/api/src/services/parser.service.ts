@@ -42,6 +42,10 @@ function detectBank(text: string): string {
   // counterparty transaction description could plausibly contain, so it's
   // safe to check across the whole document rather than just the header.
   if (/kuda mf bank|kuda technologies/i.test(text)) return 'Kuda Bank'
+  // Same reasoning for Access Bank: its statement's own domain appears only
+  // in the customer-service footer, never in the header, and is not
+  // something a counterparty description would plausibly contain.
+  if (/accessbankplc\.com/i.test(text)) return 'Access Bank'
 
   const header = text.slice(0, 500).toLowerCase()
 
@@ -443,6 +447,77 @@ function parseTrailingBalanceLedger(text: string): ParsedTransaction[] {
   return transactions
 }
 
+// ─── Three-column ledger parser ────────────────────────────────────────────────
+// Access Bank's export: each row is
+//   DD-MON-YY (posted) + DD-MON-YY (value), glued with no separator
+//   description text, may continue on the same line or wrap onto more lines
+//   [Debit or "-"][Credit or "-"][Balance], glued to the end of the description
+// A single "-" (not "--") marks an empty debit/credit cell.
+const LEDGER3_BOILERPLATE = [
+  /^posted datevalue date/i,
+  /automated transaction alert/i,
+  /^page \d+/i,
+  /^transactions$/i,
+  /contactcenter@/i,
+  /^\d+, \+234/,
+]
+const LEDGER3_DATE_LINE = /^(\d{2}-[A-Za-z]{3}-\d{2})(\d{2}-[A-Za-z]{3}-\d{2})(.*)$/
+const LEDGER3_TAIL = /^(.*?)(?<!\d)(-|[\d,]+\.\d{2})(-|[\d,]+\.\d{2})([\d,]+\.\d{2})$/
+// A date fragment like ".../26" immediately followed by an amount with no
+// separator ("26150.00") is textually indistinguishable from a single
+// larger amount — inserting a boundary right after the 2-digit year is the
+// only way to disambiguate it from the real amount that follows.
+const LEDGER3_EMBEDDED_DATE_GLUE = /(\d{2}\/\d{2}\/\d{2})(\d)/
+
+function parseThreeColumnLedger(text: string): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = []
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !LEDGER3_BOILERPLATE.some((p) => p.test(l)))
+
+  let i = 0
+  while (i < lines.length) {
+    const dm = LEDGER3_DATE_LINE.exec(lines[i])
+    if (!dm) {
+      i++
+      continue
+    }
+    const dateLine = dm[1]
+    let block = dm[3] || ''
+    let j = i + 1
+    while (j < lines.length && !LEDGER3_DATE_LINE.test(lines[j])) {
+      block += (block ? ' ' : '') + lines[j]
+      j++
+    }
+    block = block.replace(LEDGER3_EMBEDDED_DATE_GLUE, '$1 $2')
+
+    const tm = LEDGER3_TAIL.exec(block.trim())
+    if (tm) {
+      const description = tm[1].replace(/\s+/g, ' ').trim().slice(0, 200)
+      const debitRaw = tm[2]
+      const creditRaw = tm[3]
+      const isCredit = creditRaw !== '-'
+      const amount = parseAmount(isCredit ? creditRaw : debitRaw)
+      const type: 'DEBIT' | 'CREDIT' = isCredit ? 'CREDIT' : 'DEBIT'
+
+      if (amount > 0 && description.length > 0) {
+        transactions.push({
+          date: parseDate(dateLine),
+          description,
+          amount,
+          type,
+          rawText: `${dateLine} ${description} ${tm[2]} ${tm[3]} ${tm[4]}`,
+        })
+      }
+    }
+
+    i = j
+  }
+
+  return transactions
+}
+
 // ─── Main parser ──────────────────────────────────────────────────────────────
 
 export async function parsePdf(filePath: string): Promise<ParserResult> {
@@ -461,6 +536,7 @@ export async function parsePdf(filePath: string): Promise<ParserResult> {
     parseGeneric(rawText),
     parseConcatenatedTable(rawText),
     parseTrailingBalanceLedger(rawText),
+    parseThreeColumnLedger(rawText),
   ]
   const transactions = candidates.reduce((best, current) =>
     current.length > best.length ? current : best
