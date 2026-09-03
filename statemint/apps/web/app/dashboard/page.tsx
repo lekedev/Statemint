@@ -138,9 +138,18 @@ export default function DashboardPage() {
                   </div>
                   <p style={{ color: 'var(--gray-3)', fontSize: 12 }}>
                     {doc.fileName} ·{' '}
-                    {doc.transactionCount ? `${doc.transactionCount} transactions` : 'Processing...'}{' '}
+                    {doc.status === 'FAILED'
+                      ? 'Failed'
+                      : doc.transactionCount
+                        ? `${doc.transactionCount} transactions`
+                        : 'Processing...'}{' '}
                     · {formatDate(doc.createdAt)}
                   </p>
+                  {doc.status === 'FAILED' && doc.errorMessage && (
+                    <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>
+                      {doc.errorMessage}
+                    </p>
+                  )}
                 </div>
 
                 {doc.status === 'COMPLETED' && (

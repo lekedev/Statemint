@@ -245,6 +245,7 @@ function formatDocument(doc: {
   status: string
   createdAt: Date
   parsedAt: Date | null
+  errorMessage?: string | null
 }): DocumentSummary {
   return {
     id: doc.id,
@@ -253,6 +254,7 @@ function formatDocument(doc: {
     status: doc.status as DocumentSummary['status'],
     createdAt: doc.createdAt.toISOString(),
     parsedAt: doc.parsedAt?.toISOString() ?? null,
+    errorMessage: doc.errorMessage,
   }
 }
 

@@ -13,6 +13,7 @@ export interface Document {
   createdAt: string
   parsedAt: string | null
   transactionCount?: number
+  errorMessage?: string | null
 }
 
 export interface Analytics {

@@ -36,6 +36,7 @@ export interface DocumentSummary {
   createdAt: string
   parsedAt: string | null
   transactionCount?: number
+  errorMessage?: string | null
 }
 
 // ─── Transaction ─────────────────────────────────────────────────────────────

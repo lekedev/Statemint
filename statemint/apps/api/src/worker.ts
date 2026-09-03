@@ -41,6 +41,12 @@ parseQueue.process(async (job: Bull.Job<ParseJobData>) => {
     fs.writeFileSync(tempFilePath, Buffer.from(fileBuffer, 'base64'))
     const { bankName, transactions } = await parsePdf(tempFilePath)
 
+    if (transactions.length === 0) {
+      throw new Error(
+        "We couldn't read any transactions from this statement. Its layout may not be supported yet — try exporting it differently, or contact support with the file."
+      )
+    }
+
     await prisma.document.update({
       where: { id: documentId },
       data: { bankName, parsedAt: new Date() },
