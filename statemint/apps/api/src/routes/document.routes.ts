@@ -61,9 +61,19 @@ router.post(
     // Idempotency: same file hash = same document
     const existing = await prisma.document.findUnique({
       where: { fileHash },
+      include: { _count: { select: { transactions: true } } },
     })
 
-    if (existing && existing.status !== 'FAILED') {
+    // A prior attempt that errored out, or one that "completed" without
+    // extracting a single transaction (e.g. an unrecognized statement
+    // layout that's since been fixed), is worth retrying rather than
+    // replaying the stale, empty result forever.
+    const shouldRetry =
+      existing &&
+      (existing.status === 'FAILED' ||
+        (existing.status === 'COMPLETED' && existing._count.transactions === 0))
+
+    if (existing && !shouldRetry) {
       // Clean up duplicate file
       fs.unlinkSync(filePath)
       res.status(200).json({
@@ -75,9 +85,7 @@ router.post(
     }
 
     if (existing) {
-      // A previous attempt at this file failed (e.g. transient infra issue) —
-      // retry it instead of replaying the stale failed record forever. Read
-      // the fresh upload's bytes before discarding the duplicate file.
+      // Read the fresh upload's bytes before discarding the duplicate file.
       const fileBuffer = fs.readFileSync(filePath).toString('base64')
       fs.unlinkSync(filePath)
 
