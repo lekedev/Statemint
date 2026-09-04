@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai'
 import { ParsedTransaction } from '../types'
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
 
 // Real bank/fintech statement text is long — Gemini's context window
 // comfortably covers even large multi-page statements, but this caps how
